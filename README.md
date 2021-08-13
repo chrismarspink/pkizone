@@ -35,12 +35,20 @@ curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-h
 ```
 
 Shortcut to organizationName and `dn` syntax - Note that `ca.cnf` changed on `0.7`,
-you should update or remove `<local-ca-dir>/ssl/ca/ca.cnf` before restart `simple-ca`:
+you should update or remove `<local-ca-dir>/ssl/ca/ca.cnf` before restart `pkizone`:
 
 ```
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&o=company&ns=my-host.localdomain"
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-host/O=company&ns=my-host.localdomain"
 ```
+
+Get a ca ticket:
+
+```
+curl -fk -o ./ca_name.ticket "https://localhost/sign?cn=my-host&ns=my-host.localdomain"
+curl "https://localhost/ticket/ca_name"
+```
+
 
 One liner key and cert:
 
