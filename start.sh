@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+##2021-08-13 added at github 
 
 info() {
     echo "[$(date -u '+%Y/%m/%d %H:%M:%S GMT')] $*"
