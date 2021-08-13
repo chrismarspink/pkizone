@@ -58,16 +58,53 @@ case "$command" in
         docker secret create nse_password nse.password
         docker secret ls 
         ;;
-    pkizone)
-        
-        docker run -d -p 80:8080 -p 443:8443 \
-
+    
+    start)
+        ## service name is ca, admin, log : can be replaced to other container.
+        if [ $2 == "ca" ]; then
+            echo "start ca service"
+            if [ "$(docker service ls)" == *"jkkim7202/pkizone"* ]; then
+                docker service rm $(docker service ls | grep "jkkim7202/pkizone" | cut -f1 -d" ")
+            else
+                echo "no pkizone_ca_serivice"
+            fi
+            docker pull jkkim7202/pkizone:latest
+            docker  service create \
+                --name pkizone_ca_service  \
+                --replicas 1 \
+                --secret source=iot_smarthome_password,target=iot_smarthome_password \
+                --secret source=nse_password,target=nse_password \
+                -p 80:8080 -p 443:8443 \
+                --env CA_LIST=iot_smarthome,nse \
+                --env CA_CN_nse="CA for NSE" \
+                --env CA_CN_iot_smarthome="IoT Smart Home CA" \
+                --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
+        elif [ $2 == "admin" ]; then
+            echo "start portainer"
+        elif [ $2 == "dozzle" ]; then
+            echo "start dozzle"
+        fi
+        ;;
+    stop)
+        ## service name is ca, admin, log : can be replaced to other container.
+        if [ $2 == "ca" ]; then
+            echo "stop ca service"
+            if [ "$(docker service ls)" == *"jkkim7202/pkizone"* ]; then
+                docker service rm $(docker service ls | grep "jkkim7202/pkizone" | cut -f1 -d" ")
+            else
+                echo "no pkizone_ca_serivice"
+            fi
+        elif [ $2 == "admin" ]; then
+            echo "stop portainer"
+        elif [ $2 == "dozzle" ]; then
+            echo "stop dozzle"
+        fi
         ;;
 
     up)
         echo "------------------------------"
         echo "Start docker PKI service.     "
-        echo "      docker swarm mode init  "
+        echo " - docker swarm mode init  "
         echo "------------------------------"
         ## if need portainer and volume not created
         if [ ! -d portainer_data ]; then 
