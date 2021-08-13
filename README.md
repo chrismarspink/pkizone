@@ -7,7 +7,7 @@ Certificate Authority based on OpenSSL.
 Run the CA:
 
 ```
-docker run -d -p 80:8080 -p 443:8443 quay.io/jcmoraisjr/simple-ca
+docker run -d -p 80:8080 -p 443:8443 jkkim7202/pkizone:latest
 ```
 
 Create a private key and certificate request:
