@@ -42,13 +42,25 @@ curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-host/O=company&ns=my-host.localdomain"
 ```
 
-Get a ca ticket:
+create client sign key and public key
+```
+client_sign_key=sign.key
+client_sign_pub=sign.pub
+openssl ecparam -genkey -name $client_sign_alg -noout -out $client_sign_key
+openssl ec -in $client_sign_key -pubout -out $client_sign_pub
+```
+
+get ca ticket to create access token
 
 ```
-curl -fk -o ./ca_name.ticket "https://localhost/sign?cn=my-host&ns=my-host.localdomain"
-curl "https://localhost/ticket/ca_name"
+curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
+curl "https://localhost/ticket/my-ca_name"
 ```
 
+create ca token(script)
+```
+token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
+```
 
 One liner key and cert:
 
