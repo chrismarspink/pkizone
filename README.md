@@ -15,7 +15,7 @@ OpenSSL 기반의 인증서 발급 서비스
 * 서명용 키 쌍을 생성
 * CA에 서명용 티켓(ticket)을 요청
 * 티켓에 자신의 개인키로 서명하여 등록 토큰을 생성
-* 서버의 자신의 계정(Email), 틍록토큰, 공개키를 전달
+* 서버의 자신의 계정(Email), 등록토큰, 공개키를 전달
 하는 과정을 수행한다. 
 
 create client sign key and public key
@@ -26,8 +26,7 @@ openssl ecparam -genkey -name $client_sign_alg -noout -out $client_sign_key
 openssl ec -in $client_sign_key -pubout -out $client_sign_pub
 ```
 
-get ca ticket to create access token
-
+CA  create access token
 ```
 curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
 curl "https://localhost/ticket/my-ca_name"
