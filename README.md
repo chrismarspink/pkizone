@@ -1,6 +1,44 @@
 # PKIZONE
 
-Certificate Authority based on OpenSSL.
+OpenSSL 기반의 인증서 발급 서비스
+
+
+# 사용자(클라이언트)
+
+클라이언트는 최종 사용자(End User) 또는 최종 사용자에게 인증서 발급을 대행하는
+역할을 수행할 수 있다
+클라이언트는 CA에 등록된 사용자로, 자격 증명을 위한 개인키, 공개키 쌍을 생성해야 한다. 
+
+# 사용자 등록(Registration)
+
+사용자 등록을 위해 
+(1) 서명용 키 쌍을 생성
+(2) CA에 서명용 티켓(ticket)을 요청
+(3) 티켓에 자신의 개인키로 서명하여 등록 토큰을 생성
+(4) 서버의 자신의 계정(Email), 틍록토큰, 공개키를 전달
+하는 과정을 수행한다. 
+
+create client sign key and public key
+```
+client_sign_key=sign.key
+client_sign_pub=sign.pub
+openssl ecparam -genkey -name $client_sign_alg -noout -out $client_sign_key
+openssl ec -in $client_sign_key -pubout -out $client_sign_pub
+```
+
+get ca ticket to create access token
+
+```
+curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
+curl "https://localhost/ticket/my-ca_name"
+```
+
+create ca token(script)
+```
+token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
+```
+
+
 
 # Usage
 
@@ -42,25 +80,7 @@ curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-host/O=company&ns=my-host.localdomain"
 ```
 
-create client sign key and public key
-```
-client_sign_key=sign.key
-client_sign_pub=sign.pub
-openssl ecparam -genkey -name $client_sign_alg -noout -out $client_sign_key
-openssl ec -in $client_sign_key -pubout -out $client_sign_pub
-```
 
-get ca ticket to create access token
-
-```
-curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
-curl "https://localhost/ticket/my-ca_name"
-```
-
-create ca token(script)
-```
-token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
-```
 
 One liner key and cert:
 
