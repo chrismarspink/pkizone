@@ -118,29 +118,29 @@ The signing of certificates can also be protected with a token:
 echo -n "mysupersecret" | md5sum
 docker run -d -p 80:8080 -p 443:8443 \
   -e TOKEN=md5:6dc90cbae61d22f5cd1ca3f4025c47a3 \
-  quay.io/jcmoraisjr/simple-ca
+  jkkim7202/pkizone:latest
 ```
 
 Now `/sign` method must provide `&token=mysupersecret` param, otherwise the certificate won't be signed. If using echo to generate the hash, remember to use `-n` so echo won't add a line break into your secret.
 
-# Multi Certificate Authority
+# 다중 인증 기관(Multi Certificate Authority)
 
-Since 0.8 simple-ca has support for multiple certificate authorities:
+CA 서비스는 여러 인증서를 동시에 발급할 수 있다(다중 인증 기관: Multiple-CA)
 
 ```
 docker run -d -p 80:8080 -p 443:8443 \
-  -e CA_LIST=servers,etcd,kube \
-  -e CA_CN_servers="CA for servers" \
-  -e CA_CN_etcd="Etcd CA" \
-  -e CA_CN_kube="Kubernetes CA" \
-  quay.io/jcmoraisjr/simple-ca
-openssl req -new -newkey rsa:2048 -keyout kube-etcd-key.pem -nodes -subj "/" | \
-  curl -fk --data-binary @- -o kube-etcd.pem "https://localhost/sign/etcd?cn=kube"
-openssl req -new -newkey rsa:2048 -keyout kube-admin-key.pem -nodes -subj "/" | \
-  curl -fk --data-binary @- -o kube-admin.pem "https://localhost/sign/kube?cn=admin&o=system:masters"
+  -e CA_LIST=ca1,ca2,ca3 \
+  -e CA_CN_servers="CA1 server" \
+  -e CA_CN_etcd="CA2" \
+  -e CA_CN_kube="ca3 certiciate authority" \
+  jkkim7202/pkizone:latest
+openssl req -new -newkey rsa:2048 -keyout ca1.pem -nodes -subj "/" | \
+  curl -fk --data-binary @- -o ca1.pem "https://localhost/sign/ca1?cn=ca1"
+openssl req -new -newkey rsa:2048 -keyout ca2-key.pem -nodes -subj "/" | \
+  curl -fk --data-binary @- -o ca2.pem "https://localhost/sign/ca2?cn=ca2 admin&o=system:masters"
 ```
 
-When running 0.8 the first time on a schema of an old version, simple-ca will update to the new schema creating the CA `default`. All new certificate authorities are created as sub-directories of `/ssl/ca`.
+/ssl/ca 폴더에 인증 기관의 인증서와 환경 설정 정보가 추가된다.
 
 Both syntax are still valid: `/sign` and `/ca` using `default` certificate authority, and the new `/sign/<ca_id>` and `/ca/<ca_id>`. The ID of the certificate authority of the first syntax can be changed declaring `CA_DEFAULT` environment variable.
 
@@ -149,7 +149,7 @@ If TLS certificate for https isn't provided, the CA which will sign the certific
 * Certificate authority declared with `CA_DEFAULT`, which defaults to `default`
 * If the above certificate authority ID does not exist, the first certificate authority declared on `CA_LIST` will be used
 
-New certificate authorities can be included updating `CA_LIST` environment variable. The next start of simple-ca will update the schema.
+New certificate authorities can be included updating `CA_LIST` environment variable. 
 
 Note that removing CAs from the `CA_LIST` will deny the access from `/sign` and `/ca` methods but won't remove it from the schema. If the CA is reincluded to the list, the same CA cert and private key will continue to sign certificates.
 
@@ -200,18 +200,18 @@ Description=Simple CA
 After=docker.service
 Requires=docker.service
 [Service]
-ExecStartPre=-/usr/bin/docker stop simple-ca
-ExecStartPre=-/usr/bin/docker rm simple-ca
-ExecStartPre=/usr/bin/mkdir -p /var/lib/simple-ca/ssl
-ExecStartPre=/bin/bash -c 'chown $(docker run --rm quay.io/jcmoraisjr/simple-ca id -u lighttpd) /var/lib/simple-ca/ssl'
+ExecStartPre=-/usr/bin/docker stop my-ca
+ExecStartPre=-/usr/bin/docker rm my-ca
+ExecStartPre=/usr/bin/mkdir -p /var/lib/my-ca/ssl
+ExecStartPre=/bin/bash -c 'chown $(docker run --rm jkkim7202/pkizone:latest id -u lighttpd) /var/lib/my-ca/ssl'
 ExecStart=/usr/bin/docker run \
-  --name simple-ca \
+  --name my-ca \
   -p 80:8080 \
   -p 443:8443 \
   -e CERT_TLS_DNS=ca.mycompany.com \
   -e CA_CN=MyCompany-CA \
-  -v /var/lib/simple-ca/ssl:/ssl \
-  quay.io/jcmoraisjr/simple-ca:latest
+  -v /var/lib/my-ca/ssl:/ssl \
+  jkkim7202/pkizone:latest
 RestartSec=10s
 Restart=always
 [Install]
