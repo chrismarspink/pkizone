@@ -98,7 +98,7 @@ Docker-compose로 구동
 docker-compose up -d
 ```
 
-* docker-compose.yml 파일
+docker-compose.yml 파일
 ```
 version: '3.9'
 services:
@@ -194,78 +194,109 @@ curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&ip=10.0.0.1&ns=my-host.localdomain"
 ```
 
-Using alternative number of days:
+인증서 유효기간 설정
 
 ```
+#days를 추가하지 않으면 /ssl/ca/$CA/ca.cnf에 정의된 default days를 사용한다. 
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&days=30"
 ```
 
-The signing of certificates can also be protected with a token:
+키 쌍 생성을 서버에서 수행(keygen)
 
 ```
-echo -n "mysupersecret" | md5sum
-docker run -d -p 80:8080 -p 443:8443 \
-  -e TOKEN=md5:6dc90cbae61d22f5cd1ca3f4025c47a3 \
-  jkkim7202/pkizone:latest
+# 타원곡선 알고리즘
+# xsign API와 keygen 파라메터를 제공한다.
+# eg) keygen=rsa:2048
+curl -fk -o mykeypair.pem "https://localhost/xsign/$ca_name?dn=$dn&days=365&keygen=ecc:secp256k1&token=..."
+cat mykeypair.pem
 ```
 
-Now `/sign` method must provide `&token=mysupersecret` param, otherwise the certificate won't be signed. If using echo to generate the hash, remember to use `-n` so echo won't add a line break into your secret.
+CA인증서 다운로드
+```
+curl -fk -o cacert.pem "https://localhost/ca/$ca_name"
+openssl x509 -in cacert.pem -text -noout
+```
 
-# 다중 인증 기관(Multi Certificate Authority)
+CRL 다운로드
+```
+curl -fk -o crl.pem "https://localhost/crl/$ca_name"
+openssl crl -in crl.pem -text
+```
+
+인증서 리스트 다운로드
+```
+curl -fk -o database.txt "https://localhost/database/$ca_name"
+cat database.txt
+```
+
+
+인증서 폐지(revocation)
+```
+curl -fk --data-binary @my.pem   "https://localhost/revoke/$ca_name"
+#stdout --> 폐지된 인증서 파일 출력
+```
+
+
+CRL생성(gencrl)
+```
+curl -fk --data-binary @my.pem   "https://localhost/gencrl/$ca_name"
+#stdout --> CRL 파일 출력
+```
+
+
+# 다중 인증 기관(Multi Certificate Authority) 설정
 
 CA 서비스는 여러 인증서를 동시에 발급할 수 있다(다중 인증 기관: Multiple-CA)
 
 ```
 docker run -d -p 80:8080 -p 443:8443 \
   -e CA_LIST=ca1,ca2,ca3 \
-  -e CA_CN_servers="CA1 server" \
-  -e CA_CN_etcd="CA2" \
-  -e CA_CN_kube="ca3 certiciate authority" \
+  -e CA_CN_ca1="CA1 server" \
+  -e CA_CN_ca2="CA2" \
+  -e CA_CN_ca3="ca3 certiciate authority" \
   jkkim7202/pkizone:latest
+  
 openssl req -new -newkey rsa:2048 -keyout ca1.pem -nodes -subj "/" | \
   curl -fk --data-binary @- -o ca1.pem "https://localhost/sign/ca1?cn=ca1"
 openssl req -new -newkey rsa:2048 -keyout ca2-key.pem -nodes -subj "/" | \
   curl -fk --data-binary @- -o ca2.pem "https://localhost/sign/ca2?cn=ca2 admin&o=system:masters"
 ```
 
-/ssl/ca 폴더에 인증 기관의 인증서와 환경 설정 정보가 추가된다.
+* /ssl/ca 폴더에 인증 기관의 인증서와 환경 설정 정보가 추가된다.
 
-Both syntax are still valid: `/sign` and `/ca` using `default` certificate authority, and the new `/sign/<ca_id>` and `/ca/<ca_id>`. The ID of the certificate authority of the first syntax can be changed declaring `CA_DEFAULT` environment variable.
+* `/sign` and `/xsign`은 `default` 인증 기관을 의미한다.
+* `/sign/<ca_id>`, `/xsign/<ca_id>`은 <ca_id>에 대응되는 인증기관의 설정을 사용한다 
 
-If TLS certificate for https isn't provided, the CA which will sign the certificate will be chosen in the following order:
+TLS 설정
+* TLS 인증서가 별도로 설정되지 않으면, PKIZONE은 다음 순서대로 1회용 인증서를 생성한다. 
+* 'CA_DEFAULT'에 해당하는 CA로 인증서 생성
+* `CA_LIST`에 명시된 첫번째 인증 기관 설정을 이용, TLS 인증서 생성
 
-* Certificate authority declared with `CA_DEFAULT`, which defaults to `default`
-* If the above certificate authority ID does not exist, the first certificate authority declared on `CA_LIST` will be used
 
-New certificate authorities can be included updating `CA_LIST` environment variable. 
+# 파라메터(Parameters)
 
-Note that removing CAs from the `CA_LIST` will deny the access from `/sign` and `/ca` methods but won't remove it from the schema. If the CA is reincluded to the list, the same CA cert and private key will continue to sign certificates.
+인증서 발급을 파라메터(xsign도 동일): '/sign', '/xsign' 메소드:
 
-# Parameters
+* `dn`: 인증서 DN(Distinguished name), 형식은 다음과 같다: `/O=.../OU=.../.../CN=...`
+* `cn`: 사용자 이름(Common name): `/CN=` 형식으로 지정
+* `o`: 조직명(소문자 o를 사용)
+* `ip`: 사용자 IP 주소. IP주소가 주어지면 서버 인증서를 생성한다
+* `ns`: 네임서버(ip, ns는 ","로 분리된 리스트를 사용할 수 있다). `ip`나 `ns`가 제공되면 서버 인증서를 그렇지 않은 경우 클라이언트 인증서를 생성한다
+* `days`: 인증서 유효기간
+* `token`: 인증서 발급시 제공해야 하는 토큰, "사용자ID:서명값"으로 구성된다.
+* `keygen`: xsign 메소드에서 사용, 개인키를 서버에서 생성하기 원하는 경우, "알고리즘:파라메터" 형식으로 제공.
 
-The following parameters can be used in the query string of the `/sign` method:
+# PKIZONE 옵션
 
-* `dn`: Distinguished name in the following format: `/O=.../OU=.../.../CN=...`
-* `cn`: Common name of the certificate - do not use the `/CN=` prefix
-* `o`: Comma separated list of organizationName - do not use the `/O=` prefix
-* `ip`: Comma separated list of IPs of server certificate
-* `ns`: Comma separated list of name servers of server certificate. Either `ip` or `ns` must be provided for server certificates, otherwise a client certificate will be generated
-* `days`: The number of days to certify the signed certificate
-* `token`: Security token, should be provided when signing certificates if the server was started with `TOKEN` envvar
+인증서버 구동을 위한 환경설정:
 
-# Options
-
-The following optional environment variables may be defined:
-
-* `TOKEN`: hash of the secret token. If defined the `&token=` is mandatory and must match the value. The token has the following format: `<algorithm>:<hash-itself>`. The currently supported algorithms are `md5`, `sha1`, `sha256` and `sha512`
-* `CRT_DAYS`: default number of days to certify signed certificates, defaults to 365, can be changed per signed certificate with `&days=<days>`
-* `CA_DAYS`: number of days to certify the auto generated CA certificate, defaults to 3652 (10 years)
-* `CA_DIR`: path to directory of all certificate authorities. A new cert and key will be created for any CA if not found
-* `CA_CN`: A self generated CA will use `CA_CN` as its common name, defaults to `my-ca`
-* `CERT_TLS`: TLS certificate and key file used by web server to provide https, defaults to `/ssl/www/localhost.pem`. If not found, CA itself will sign a certificate
-* `CERT_TLS_DNS`: name server of the CA server, used on auto generated TLS certificate. At least one of `CERT_TLS_DNS` or `CERT_TLS_IP` should be provided
-* `CERT_TLS_IP`: public IP of the CA server, used on auto generated TLS certificate. At least one of `CERT_TLS_DNS` or `CERT_TLS_IP` should be provided
-* `CERT_TLS_DAYS`: number of days to certify the CA server cert, used on auto generated TLS certificate, defaults to 365 days
+* `CRT_DAYS`: 발급된 인증서 유효기간, 디폴트는 365(days). `&days=<days>`와 같이 변경 가능
+* `CA_DAYS`: CA 인증서 유효기간(자동 생성인 경우에만 적용). 디폴트는 10년(3652(days).
+* `CA_CN`: CA 자동 생성 시 CA 인증서의 CN값을 지정
+* `CERT_TLS`: TLS 인증서(https), 디폴트: `/ssl/www/localhost.pem`. 파일이 존재하지 않으면 자동으로 생성된다
+* `CERT_TLS_DNS`: CA 서버 DNS, TLS 인증서를 자동 생성하는 경우 적용된다(`CERT_TLS_DNS`, `CERT_TLS_IP`, 둘 중 하나는 설정되어야 한다)
+* `CERT_TLS_IP`: CA 서버 공인 IP. `CERT_TLS_DNS`와 동일한 설정을 사용.
+* `CERT_TLS_DAYS`: CA 서버 TLS 인증서의 유효기간(default: 365 days)
 
 When using multi certificate authority, the following environment variables might also be defined:
 
@@ -275,33 +306,6 @@ When using multi certificate authority, the following environment variables migh
 * `CA_DAYS_<ca_id>`: override default `CA_DAYS`
 * `CA_CN_<ca_id>`: override default `CA_CN`
 
-# Deploy
+# 운영 적용
 
-* Mount the `/ssl` directory to ensure that nothing will be lost if the container is recreated
-* The external directory should be owned by container's `lighttpd` user (uid 100)
-
-This systemd unit has the most common configuration:
-
-```
-[Unit]
-Description=Simple CA
-After=docker.service
-Requires=docker.service
-[Service]
-ExecStartPre=-/usr/bin/docker stop my-ca
-ExecStartPre=-/usr/bin/docker rm my-ca
-ExecStartPre=/usr/bin/mkdir -p /var/lib/my-ca/ssl
-ExecStartPre=/bin/bash -c 'chown $(docker run --rm jkkim7202/pkizone:latest id -u lighttpd) /var/lib/my-ca/ssl'
-ExecStart=/usr/bin/docker run \
-  --name my-ca \
-  -p 80:8080 \
-  -p 443:8443 \
-  -e CERT_TLS_DNS=ca.mycompany.com \
-  -e CA_CN=MyCompany-CA \
-  -v /var/lib/my-ca/ssl:/ssl \
-  jkkim7202/pkizone:latest
-RestartSec=10s
-Restart=always
-[Install]
-WantedBy=multi-user.target
-```
+* `/ssl` 디렉토리가 마운트 되어야 한다. 인증서 생성 정보가 저장되는 디렉토리
