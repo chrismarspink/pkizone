@@ -31,6 +31,7 @@ openssl ec -in $client_sign_key -pubout -out $client_sign_pub
 ##인증 기관(my-ca_name)에 접근할 수 있는 정보인 티켓 발급
 ##티켓은 인증기관별로 생성되는 난수이다.
 curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
+#or
 curl "https://localhost/ticket/my-ca_name"
 ```
 
@@ -123,57 +124,68 @@ secrets:
     file: ca2.password
 
 ```
-Create a private key and certificate request:
+
+# PKIZONE 서비스
+
+개인키 쌍/인증서신청서 생성(Create a private key and certificate request):
 
 ```
+# RSA 키 쌍 생성
 openssl req -new -newkey rsa:2048 -keyout host-key.pem -nodes -out host.csr -subj "/"
+
+# ECDSA 키 쌍 생성
+openssl ecparam -list_curves #타원곡선 키 파라메터 확인
+openssl ecparam -genkey -name secp256r1  -out my.key # 개인키 파일 생성
+openssl req -new -key my.key  -out my.csr -subj "/"
 ```
 
-Sign the certificate -- change `localhost` to the IP if Docker Server is on a VM - eg Docker Machine:
+인증서 발급(Sign the certificate)
+* localhost를 실제 서버주소로 대체한다.
+* 인증서는 my.pemd에 저장된다. 
 
 ```
-curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&ns=my-host.localdomain"
+emailid="myid@mailaddr"
+MY_DN="/C=KR/O=my-org/OU=my-ou/CN=my-cn"
+curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
+token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
+
+curl -fk --data-binary @my.csr -o my.pem "https://localhost/sign?dn=$MY_DN&token=$emailid:$token"
 ```
 
-Check the certificate:
+발급된 인증서 확인(Check the certificate):
 
 ```
-openssl x509 -noout -text -in host.pem
+openssl x509 -noout -text -in my.pem
 ```
 
-Using `dn` instead `cn`:
+DN 대신 'cn'으로 인증서 발급:
 
 ```
-curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-host&ns=my-host.localdomain"
-```
+curl -fk --data-binary @my.csr -o my.pem "https://localhost/sign?cn=my-cn&ns=my-host.localdomain?token=$emailid:$token"
 
-Shortcut to organizationName and `dn` syntax - Note that `ca.cnf` changed on `0.7`,
-you should update or remove `<local-ca-dir>/ssl/ca/ca.cnf` before restart `pkizone`:
-
-```
-curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&o=company&ns=my-host.localdomain"
-curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?dn=/CN=my-host/O=company&ns=my-host.localdomain"
+# O, NS 필드를 추가
+curl -fk --data-binary @my.csr -o my.pem "https://localhost/sign?cn=my-host&o=company&ns=my-host.localdomain&token=..."
+curl -fk --data-binary @my.csr -o my.pem "https://localhost/sign?dn=/CN=my-host/O=company&ns=my-host.localdomain&token=..."
 ```
 
 
-
-One liner key and cert:
+1라인 인증서 신청:
 
 ```
 openssl req -new -newkey rsa:2048 -keyout host-key.pem -nodes -subj "/" | \
-  curl -fk --data-binary @- -o host.pem "https://localhost/sign?cn=my-host&ns=my-host.localdomain"
+  curl -fk --data-binary @- -o host.pem "https://localhost/sign?cn=my-host&ns=my-host.localdomain&token"
 ```
 
-Using subject from the request - `cn` is optional since `0.7`:
+인증서 신청서에 CN 추가:
 
 ```
 openssl req -new -newkey rsa:2048 -keyout host-key.pem -nodes -subj "/CN=my-host" | \
   curl -fk --data-binary @- -o host.pem "https://localhost/sign?ns=my-host.localdomain"
 ```
 
-Using alternative IP, NS or both:
+IP, NS 추가:
 
-**Note:** If neither IP nor NS is provided, a client certificate would be generated. Always provide IP, NS or both for server certificates.
+**Note:** IP나 NS가 제공되지 않으면, 클라이언트 인증서가 생성된다. 서버 인증서를 생성하기 위해서는 IP나 NS를(또는 둘다) 제공해야 한다.
 
 ```
 curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&ip=10.0.0.1"
