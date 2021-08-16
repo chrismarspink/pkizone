@@ -48,23 +48,49 @@ token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl b
 Run the CA:
 
 ```
-docker run -d -p 80:8080 -p 443:8443 jkkim7202/pkizone:latest
+docker run -d -p 80:8080 -p 443:8443 
+      --env CA_LIST=iot_smarthome,nse \
+      --env CA_CN_nse="CA for NSE" \
+      --env CA_CN_iot_smarthome="IoT Smart Home CA" \
+      --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
+```
+
+Docker secret 생성
+* docker secret은 개인키 패스워드를 도커 내부에 전달하기 위한 수단으로 사용된다 
+
+```
+#파일에서 시크릿 생성
+docker secret create ca1_password ca1.password
+docker secret create ca2_password ca2.password
+
+#파일 없이 시크릿 생성
+echo "mypass2" | docker secret create ca1_password -
+echo "mypass2" | docker secret create ca2_password -
+
+#시크릿 확인
+docker secret ls
 ```
 
 Docker SWARM mode에서 구동
-'''
+```
+##docker swarm mode init
+docker swarm init
+
+##pkizone containe pull
 docker pull jkkim7202/pkizone:latest
-            docker  service create \
-                --name pkizone_ca_service  \
-                --replicas 1 \
-                --secret source=iot_smarthome_password,target=iot_smarthome_password \
-                --secret source=nse_password,target=nse_password \
-                -p 80:8080 -p 443:8443 \
-                --env CA_LIST=iot_smarthome,nse \
-                --env CA_CN_nse="CA for NSE" \
-                --env CA_CN_iot_smarthome="IoT Smart Home CA" \
-                --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
-'''
+
+##도커 서비스로 구동
+docker  service create \
+      --name pkizone_ca_service  \
+      --replicas 1 \
+      --secret source=iot_smarthome_password,target=iot_smarthome_password \
+      --secret source=nse_password,target=nse_password \
+      -p 80:8080 -p 443:8443 \
+      --env CA_LIST=iot_smarthome,nse \
+      --env CA_CN_nse="CA for NSE" \
+      --env CA_CN_iot_smarthome="IoT Smart Home CA" \
+      --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
+```
 
 Create a private key and certificate request:
 
