@@ -42,7 +42,18 @@ curl "https://localhost/ticket/my-ca_name"
 token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
 ```
 
+사용자를 pkizone에 등록
+```
+# ca의 ticket 다운로드
+curl -fk -o ./$ca_name.ticket  "$ticket/$ca_name"
 
+# 서명 토큰 생성
+token="$(openssl dgst -sha1 -sign sign.key ./$ca_name.ticket | openssl base64 -A)"
+
+# id:token
+# 공개키와 id를 등록
+curl -fk  --data-binary @sign.pub "https://localhost/clientadd/$ca_name?clientid=$clientid&token=$cient-id:$token"
+```
 
 # PKIZONE 사용법(Usage)
 
