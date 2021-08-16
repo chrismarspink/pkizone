@@ -415,7 +415,7 @@ case "$ca_method" in
     info "CA cert($ca_id): $(openssl x509 -noout -subject -in ca.pem)"
     ;;
   revoke)
-    #err=$(checktoken) || unAuthorized
+    err=$(checktoken) || unAuthorized
     revoke_subj=/tmp/revoke_subj-$$.pem
     trap "rm -f $revoke_subj" EXIT
     err=$(revoke "$revoke_subj" 2>&1) || badRequest "$err"

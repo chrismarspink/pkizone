@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-##2021-08-13 added at github 
+##jkkim@ 2021-08-13 added at github 
 
 info() {
     echo "[$(date -u '+%Y/%m/%d %H:%M:%S GMT')] $*"
@@ -17,7 +17,7 @@ fi
 mkdir -p "${CERT_TLS%/*}" "$CA_DIR"
 cd "$CA_DIR"
 
-# 0.7 to 0.8 migration
+#
 if [ -f ca.cnf ] && [ ! -d "$CA_DEFAULT" ]; then
     echo "Moving to multi authority schema"
     mkdir _d
@@ -61,9 +61,9 @@ for ca_id in ${CA_LIST//,/ }; do
     if [ ! -f ca.pem ] || [ ! -f private/ca-key.pem ]; then
         info "CA certificate or private key not found, building CA \"$ca_id\"..."
         openssl ecparam -out private/ca-key.pem -name secp521r1 -genkey 
-        info "ca private key encrypt with aes256"
+        info "CA private key encrypted with AES256"
         openssl ec -in private/ca-key.pem -out private/ca-key.pem -aes256 -passout file:/run/secrets/"$ca_id"_password
-        info "generate CA private key. param:secp521r1. "
+        info "CA CA private key generated. param:secp521r1. "
         #openssl genrsa -out private/ca-key.pem 2048
         openssl req \
             -x509 -new -nodes -days ${CA_DAYS_value:-3652} -subj "/CN=$CA_CN_value" \
