@@ -45,7 +45,7 @@ token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl b
 
 # PKIZONE 사용법(Usage)
 
-Run the CA:
+PKIZONE 구동
 
 ```
 docker run -d -p 80:8080 -p 443:8443 
@@ -83,15 +83,46 @@ docker pull jkkim7202/pkizone:latest
 docker  service create \
       --name pkizone_ca_service  \
       --replicas 1 \
-      --secret source=iot_smarthome_password,target=iot_smarthome_password \
-      --secret source=nse_password,target=nse_password \
+      --secret source=ca1_password,target=ca1_password \
+      --secret source=ca2_password,target=ca2_password \
       -p 80:8080 -p 443:8443 \
-      --env CA_LIST=iot_smarthome,nse \
-      --env CA_CN_nse="CA for NSE" \
-      --env CA_CN_iot_smarthome="IoT Smart Home CA" \
+      --env CA_LIST=ca1,ca2 \
+      --env CA_CN_ca1="CA1" \
+      --env CA_CN_ca2="CA2" \
       --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
 ```
 
+Docker-compose로 구동
+```
+docker-compose up -d
+```
+
+* docker-compose.yml 파일
+```
+version: '3.9'
+services:
+  pki:
+    image: jkkim7202/pkizone:latest
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      - CA_LIST=ca1,ca2
+      - CA_CN_ca1=CA1
+      - CA_CN_ca2=CA2
+    volumes:
+      - /Users/jkkim/dev/ca.service/ssl/ca:/ssl/ca
+    secrets:
+      - ca1_password
+      - ca2_password
+
+secrets:
+  ca1_password:
+    file: ca1.password
+  ca2_password:
+    file: ca2.password
+
+```
 Create a private key and certificate request:
 
 ```
