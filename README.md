@@ -18,7 +18,7 @@ OpenSSL 기반의 인증서 발급 서비스
 * 서버의 자신의 계정(Email), 등록토큰, 공개키를 전달
 하는 과정을 수행한다. 
 
-create client sign key and public key
+클라이언트 서명키와 공개키 생성(create client sign key and public key)
 ```
 client_sign_key=sign.key
 client_sign_pub=sign.pub
@@ -26,26 +26,45 @@ openssl ecparam -genkey -name $client_sign_alg -noout -out $client_sign_key
 openssl ec -in $client_sign_key -pubout -out $client_sign_pub
 ```
 
-CA  create access token
+인증기관 접근 티켓 발급(get a access ticket)
 ```
+##인증 기관(my-ca_name)에 접근할 수 있는 정보인 티켓 발급
+##티켓은 인증기관별로 생성되는 난수이다.
 curl -fk -o ./ca_name.ticket "https://localhost/ticket/my-ca_name
 curl "https://localhost/ticket/my-ca_name"
 ```
 
-create ca token(script)
+인증기관 접근 토큰 생성 - create ca token(script)
 ```
+##ticket에 클라이언트 개인키로 서명한 값인 토큰을 생성한다.
+##인증서 발급 신청을 위해서는 토큰을 CA에 제시, 신청자가 클라이언트 자신임을 증명해야 한다.
 token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
 ```
 
 
 
-# Usage
+# PKIZONE 사용법(Usage)
 
 Run the CA:
 
 ```
 docker run -d -p 80:8080 -p 443:8443 jkkim7202/pkizone:latest
 ```
+
+Docker SWARM mode에서 구동
+'''
+docker pull jkkim7202/pkizone:latest
+            docker  service create \
+                --name pkizone_ca_service  \
+                --replicas 1 \
+                --secret source=iot_smarthome_password,target=iot_smarthome_password \
+                --secret source=nse_password,target=nse_password \
+                -p 80:8080 -p 443:8443 \
+                --env CA_LIST=iot_smarthome,nse \
+                --env CA_CN_nse="CA for NSE" \
+                --env CA_CN_iot_smarthome="IoT Smart Home CA" \
+                --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
+'''
 
 Create a private key and certificate request:
 
