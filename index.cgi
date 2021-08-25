@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="Verion: 1.0.0"
+VERSION="Verion: 1.0.1"
 DATE=$(date "+%Y%M%d%H%m.%S")
 PROG="PKIZONE(c), GreenZone Security Co., Ltd. All rights reserved."
 
@@ -43,7 +43,7 @@ info() {
 }
 
 #1 token
-old_checktoken() {
+checktoken() {
   info "TOKEN: $TOKEN"
   IFS=":" read -r algo hash <<<"$TOKEN"
   info "algo: $algo"
@@ -58,7 +58,7 @@ old_checktoken() {
 }
 
 
-checktoken() {
+checktoken_NEW() {
   ## client id로 
   ## clientidtoken=$1
   ## info "client:idtoken ==> $clientidtoken"
@@ -143,7 +143,7 @@ sign() {
 
   #info "get token: $token"
 
-  ##[ -n "$TOKEN" ] && ! checktoken "$token" && return 1
+  [ -n "$TOKEN" ] && ! checktoken "$token" && return 1
   [ -n "$cn" -a -n "$dn" ] && echo "Pick either cn or dn" && return 1
 
   [ -z "$dn" -a -n "$cn" ] && dn="/CN=$cn"
@@ -209,7 +209,7 @@ xsign() {
 
   info "do xsign - certificate with keypair"
   #info "get token: $token"
-  ##[ -n "$TOKEN" ] && ! checktoken "$token" && return 1
+  [ -n "$TOKEN" ] && ! checktoken "$token" && return 1
   [ -n "$cn" -a -n "$dn" ] && echo "Pick either cn or dn" && return 1
 
   [ -z "$dn" -a -n "$cn" ] && dn="/CN=$cn"
@@ -394,7 +394,6 @@ case "$ca_method" in
 
     ;;
   sign)  
-    err=$(checktoken) || unAuthorized
     #err=$(checktoken) || unAuthorized
     CRT=/tmp/crt-$$.pem
     trap "rm -f $CRT" EXIT
@@ -403,11 +402,11 @@ case "$ca_method" in
     out=$CRT
     ;;
   xsign)  
-    err=$(checktoken) || unAuthorized
+    #err=$(checktoken) || unAuthorized
     XCRT=/tmp/xcrt-$$.pem
     trap "rm -f $XCRT" EXIT
     err=$(xsign "$XCRT" 2>&1) || badRequest "$err"
-    info "New cert with keypair geneeated($XCRT): $(openssl x509 -noout -subject -in $XCRT)"
+    info "new keypair and certificate generated($XCRT): $(openssl x509 -noout -subject -in $XCRT)"
     out=$XCRT
     ;;
   ca)
@@ -415,7 +414,7 @@ case "$ca_method" in
     info "CA cert($ca_id): $(openssl x509 -noout -subject -in ca.pem)"
     ;;
   revoke)
-    err=$(checktoken) || unAuthorized
+    #err=$(checktoken) || unAuthorized
     revoke_subj=/tmp/revoke_subj-$$.pem
     trap "rm -f $revoke_subj" EXIT
     err=$(revoke "$revoke_subj" 2>&1) || badRequest "$err"
