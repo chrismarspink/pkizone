@@ -124,7 +124,7 @@ checktoken_NEW() {
 #1 Output
 sign() {
   local paramOutput=$1
-  unset dn cn ip ns o days ou c keygen
+  unset dn cn ip ns o days ou c keygen token
   # No decode, no space from QUERY_STRING
   for param in ${QUERY_STRING//&/ }; do
     varname="${param%%=*}"
@@ -143,7 +143,7 @@ sign() {
     esac
   done
 
-  #info "get token: $token"
+  info "sign) get token: $token"
 
   [ -n "$TOKEN" ] && ! checktoken "$token" && return 1
   [ -n "$cn" -a -n "$dn" ] && echo "Pick either cn or dn" && return 1
