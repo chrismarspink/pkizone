@@ -7,7 +7,6 @@ PROG="PKIZONE(c), GreenZone Security Co., Ltd. All rights reserved."
 
 VERIFIED_OK="Verified OK"
 
-TOKEN="on"
 
 d() {
   date -u '+%Y/%m/%d %H:%M:%S GMT'
