@@ -46,7 +46,7 @@ case "$command" in
         echo "------------------------------"
         ##./release.sh $2
         set -x
-        docker build --tag pkizone:$2 ../pkizone_src/
+        docker build --tag pkizone:$2 ./ #../pkizone_src/
         docker tag pkizone:$2 jkkim7202/pkizone:$2
         docker push jkkim7202/pkizone:$2
 
