@@ -52,6 +52,9 @@ checktoken() {
     md5|sha1|sha256|sha512) check=$(echo -n "$1" | openssl dgst -$algo -r | cut -d' ' -f1) ;;
     *) echo "Unsupported algorithm: $algo" && return 1 ;;
   esac
+  info "check: $check"
+  info "hash $hash"
+  info "in token: $1"
   [ "$check" != "$hash" ] && echo "Invalid token" && return 1
   return 0
 }
