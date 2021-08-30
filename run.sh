@@ -78,7 +78,7 @@ case "$command" in
                 --env CA_LIST=iot_smarthome,nse \
                 --env CA_CN_nse="CA for NSE" \
                 --env CA_CN_iot_smarthome="IoT Smart Home CA" \
-                --env TOKEN="510bef9b27e4ad5e97510f30116a8966" \
+                --env TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649" \
                 --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
         elif [ $2 == "admin" ]; then
             echo "start portainer"
@@ -182,14 +182,14 @@ case "$command" in
         ;;
 
     sign)
-        curl -fk -o ./$ca_name.ticket  "$ticket/$ca_name"
-        echo "ticket: $(cat ./$ca_name.ticket)"
-        token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
-        echo "token: $token"
+        #curl -fk -o ./$ca_name.ticket  "$ticket/$ca_name"
+        #echo "ticket: $(cat ./$ca_name.ticket)"
+        #token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
+        #echo "token: $token"
 
         ##idtoken="$clientid:$token"
-        idtoken="06c219e5bc8378f3a8a3f83b4b7e4649"
-        echo "id-token: $idtoken"
+        idtoken="mysecret"
+        echo "token: $idtoken"
 
         openssl req -new -newkey rsa:2048 -keyout host_$mydate.key -nodes -subj "/" |   curl -fk --data-binary @- -o host_$mydate.pem \
         "$sign/$ca_name?dn=/C=KR/O=Test/OU=Testou/CN=host_$mydate&days=365&token=$idtoken"
