@@ -188,7 +188,7 @@ case "$command" in
         echo "token: $token"
 
         ##idtoken="$clientid:$token"
-        idtoken="510bef9b27e4ad5e97510f30116a8966"
+        idtoken="06c219e5bc8378f3a8a3f83b4b7e4649"
         echo "id-token: $idtoken"
 
         openssl req -new -newkey rsa:2048 -keyout host_$mydate.key -nodes -subj "/" |   curl -fk --data-binary @- -o host_$mydate.pem \
