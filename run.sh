@@ -95,7 +95,7 @@ case "$command" in
             else
                 echo "no pkizone_ca_serivice"
             fi
-            #docker pull jkkim7202/pkizone:latest
+            docker pull jkkim7202/pkizone:latest
             docker  service create \
                 --name pkizone_ca_service  \
                 --replicas 1 \
