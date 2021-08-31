@@ -455,6 +455,7 @@ case "$ca_method" in
     err=$(searchcertificate "$tmpcert"  ) || badRequest "$err"
 
     out=$tmpcert
+    ;;
   *)
     notFound
     ;;

@@ -10,6 +10,7 @@ if [ $hostname == $LOCAL_HOST_NAME ]; then
     ca_home=/Users/jkkim/dev/ca.service/ssl/ca
     server=https://127.0.0.1
     client_secret="mysecret"
+
     #SERVER_TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649"
 else
     echo "hostname: $hostname"
@@ -90,10 +91,11 @@ case "$command" in
             echo "start ca service"
             if [[ "$(docker service ls)" == *"jkkim7202/pkizone"* ]]; then
                 docker service rm $(docker service ls | grep "jkkim7202/pkizone" | cut -f1 -d" ")
+                echo "docker service rm ..."
             else
                 echo "no pkizone_ca_serivice"
             fi
-            docker pull jkkim7202/pkizone:latest
+            #docker pull jkkim7202/pkizone:latest
             docker  service create \
                 --name pkizone_ca_service  \
                 --replicas 1 \
