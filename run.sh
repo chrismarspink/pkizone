@@ -6,7 +6,7 @@ LOCAL_HOST_NAME="jkkimui-MacBookPro.local"
 mydate=$(date "+%Y%M%d%H%m.%S")
 hostname=$(hostname)
 if [ $hostname == $LOCAL_HOST_NAME ]; then
-    pkizone_src=../pkizone_src
+    pkizone_src=./
     ca_home=/Users/jkkim/dev/ca.service/ssl/ca
     server=https://127.0.0.1
     client_secret="mysecret"
@@ -21,7 +21,7 @@ else
 fi 
 
 #tk=$(echo -n $client_secret | md5sum)
-tk=$(echo -n "client_secret" | openssl dgst -md5 -r | cut -d' ' -f1) 
+tk=$(echo -n "$client_secret" | openssl dgst -md5 -r | cut -d' ' -f1) 
 server_token="md5:$tk"
 
 echo "hostname      : $hostname"
@@ -60,7 +60,7 @@ case "$command" in
         echo "Build docker image            "
         echo "------------------------------"
         ##./build.sh 
-        docker build --tag pkizone:latest $PKIZONE_SRC_DIR
+        docker build --tag pkizone:latest $pkizone_src
         ;;
     login)
         docker login
@@ -71,7 +71,7 @@ case "$command" in
         echo "------------------------------"
         ##./release.sh $2
         set -x
-        docker build --tag pkizone:$2 $PKIZONE_SRC_DIR
+        docker build --tag pkizone:$2 $pkizone_src
         docker tag pkizone:$2 jkkim7202/pkizone:$2
         docker push jkkim7202/pkizone:$2
 
@@ -103,8 +103,8 @@ case "$command" in
                 --env CA_LIST=iot_smarthome,nse \
                 --env CA_CN_nse="CA for NSE" \
                 --env CA_CN_iot_smarthome="IoT Smart Home CA" \
-                --env TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649" \
-                --mount type=bind,source=$CA_HOME,destination=/ssl/ca jkkim7202/pkizone:latest
+                --env TOKEN="$server_token" \
+                --mount type=bind,source=$ca_home,destination=/ssl/ca jkkim7202/pkizone:latest
         elif [[ $2 == "admin" ]]; then
             echo "start portainer"
         elif [[ $2 == "dozzle" ]]; then

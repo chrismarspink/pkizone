@@ -325,8 +325,8 @@ findcert() {
       lines=`grep -i "$serial" index.txt`
       for x in $lines; do   # <--- isn't this an array
         info "line: $x" 
-        result=`echo $x | cut -f3`     
-        if [ "$result" == "$serial" ]; then && echo 
+        result=$(echo $x | cut -f3)     
+        if [ "$result" == "$serial" ]; then 
           certstr=$(openssl x509 -in ./newcerts/$serial.pem -text)
           echo $certstr >> paramOutput
         fi
