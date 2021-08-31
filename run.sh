@@ -1,11 +1,36 @@
 #!/bin/bash
 set -e
 
+LOCAL_HOST_NAME="jkkimui-MacBookPro.local"
 
 mydate=$(date "+%Y%M%d%H%m.%S")
+hostname=$(hostname)
+if [ $hostname == $LOCAL_HOST_NAME ]; then
+    pkizone_src=../pkizone_src
+    ca_home=/Users/jkkim/dev/ca.service/ssl/ca
+    server=https://127.0.0.1
+    client_secret="mysecret"
+    #SERVER_TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649"
+else
+    echo "hostname: $hostname"
+    pkizone_src=./
+    ca_home=/home/ubuntu/ca.service/ssl/ca
+    server=https://3.37.221.15
+    client_secret="mysecret"
+    #SERVER_TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649"
+fi 
 
-#server=https://127.0.0.1
-server=https://3.37.221.15
+#tk=$(echo -n $client_secret | md5sum)
+tk=$(echo -n "client_secret" | openssl dgst -md5 -r | cut -d' ' -f1) 
+server_token="md5:$tk"
+
+echo "hostname      : $hostname"
+echo "src           : $pkizone_src"
+echo "server        : $server"
+echo "cahome        : $ca_home"
+echo "client secret : $client_secret"
+echo "server token  : $server_token"
+
 sign=$server/sign
 xsign=$server/xsign
 revoke=$server/revoke
@@ -15,8 +40,8 @@ ticket=$server/ticket
 clientadd=$server/clientadd
 test=$server/test
 
-client_sign_key=./sign.key
-client_sign_pub=./sign.pub
+#client_sign_key=./sign.key
+#client_sign_pub=./sign.pub
 client_sign_alg=secp112r1
 
 ca_name=iot_smarthome
@@ -35,7 +60,7 @@ case "$command" in
         echo "Build docker image            "
         echo "------------------------------"
         ##./build.sh 
-        docker build --tag pkizone:test ../pkizone_src/
+        docker build --tag pkizone:latest $PKIZONE_SRC_DIR
         ;;
     login)
         docker login
@@ -46,7 +71,7 @@ case "$command" in
         echo "------------------------------"
         ##./release.sh $2
         set -x
-        docker build --tag pkizone:$2 ./ #../pkizone_src/
+        docker build --tag pkizone:$2 $PKIZONE_SRC_DIR
         docker tag pkizone:$2 jkkim7202/pkizone:$2
         docker push jkkim7202/pkizone:$2
 
@@ -63,7 +88,7 @@ case "$command" in
         ## service name is ca, admin, log : can be replaced to other container.
         if [ $2 == "ca" ]; then
             echo "start ca service"
-            if [ "$(docker service ls)" == *"jkkim7202/pkizone"* ]; then
+            if [[ "$(docker service ls)" == *"jkkim7202/pkizone"* ]]; then
                 docker service rm $(docker service ls | grep "jkkim7202/pkizone" | cut -f1 -d" ")
             else
                 echo "no pkizone_ca_serivice"
@@ -79,10 +104,10 @@ case "$command" in
                 --env CA_CN_nse="CA for NSE" \
                 --env CA_CN_iot_smarthome="IoT Smart Home CA" \
                 --env TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649" \
-                --mount type=bind,source=/home/ubuntu/ca.service/ssl/ca,destination=/ssl/ca jkkim7202/pkizone:latest
-        elif [ $2 == "admin" ]; then
+                --mount type=bind,source=$CA_HOME,destination=/ssl/ca jkkim7202/pkizone:latest
+        elif [[ $2 == "admin" ]]; then
             echo "start portainer"
-        elif [ $2 == "dozzle" ]; then
+        elif [[ $2 == "dozzle" ]]; then
             echo "start dozzle"
         fi
         ;;
@@ -182,12 +207,6 @@ case "$command" in
         ;;
 
     sign)
-        #curl -fk -o ./$ca_name.ticket  "$ticket/$ca_name"
-        #echo "ticket: $(cat ./$ca_name.ticket)"
-        #token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
-        #echo "token: $token"
-
-        ##idtoken="$clientid:$token"
         idtoken="mysecret"
         echo "token: $idtoken"
 
@@ -195,7 +214,6 @@ case "$command" in
         "$sign/$ca_name?dn=/C=KR/O=Test/OU=Testou/CN=host_$mydate&days=365&token=$idtoken"
 
         openssl x509 -in ./host_$mydate.pem -noout -subject
-        #openssl x509 -in ./host_$mydate.pem -text -noout
 
         cat ./host_$mydate.pem
         ;;

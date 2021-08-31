@@ -60,66 +60,6 @@ checktoken() {
 }
 
 
-checktoken_NEW() {
-  ## client id로 
-  ## clientidtoken=$1
-  ## info "client:idtoken ==> $clientidtoken"
-
-  for param in ${QUERY_STRING//&/ }; do
-    varname="${param%%=*}"
-    varvalue="${param#*=}"
-    case "$varname" in
-      token) clientidtoken=$varvalue ;;
-    esac
-  done
-
-  info "token:(id+hash) $clientidtoken" 
-
-  ## client-id : 향후 접근 제어용
-  ## signature : ticket에 client 개인키로 서명한 값
-  ## ./clients/$clientid.sig 값으로 서명 검증 --> "Verified OK"
-  IFS=":" read -r clientid token <<<"$clientidtoken"
-  info "client id: $clientid"
-  info "client token: $token"  
-
-  sigfile=/tmp/$clientid-$$.sig
-  trap "rm -f $sigfile" EXIT
-
-  info "signature file: $sigfile"
-
-  pubkeyfile=./clients/$clientid.pub
-
-  info "pubkey file: $pubkeyfile"
-
-  info "list: $(ls -al ./clients)"
-
-  [ ! -f "$pubkeyfile" ] && info "no $clientid pubkey file($pubkeyfile) exists" && return 1 
-  #[ -f $pubkeyfile ] && info "client public key: $pubkeyfile" || info "error-95";return 1 
-
-  info "check: public key file: $pubkeyfile" 
-
-  ##1. ticket file for verify client token
-  ticketfile=./ca.ticket
-  ##2. token -> signature
-  
-  info "token: $token" 
-  echo  $token | openssl base64 -d > $sigfile
-
-  #echo "dec token ==> $detoken"
-  #pop process
-  result="$(openssl dgst -sha1 -verify $pubkeyfile -signature $sigfile $ticketfile)"
-  info "checktoken(): verify result ==> [$result]" 
-
-  if [[ $result == $VERIFIED_OK ]]; then 
-    info "checktoken(): $result"
-    return 0
-  else 
-    info "checktoken():0: $result"
-  fi
-
-  return 1
-}
-
 ### sign() exec as a subprocess - do not write HTTP headers
 #1 Output
 sign() {
@@ -187,10 +127,9 @@ sign() {
 }
 
 
-
 xsign() {
   local paramOutput=$1
-  unset dn cn ip ns o days ou c keygen
+  unset dn cn ip ns o days ou c keygen token
   # No decode, no space from QUERY_STRING
   for param in ${QUERY_STRING//&/ }; do
     varname="${param%%=*}"
@@ -210,7 +149,7 @@ xsign() {
   done
 
   info "do xsign - certificate with keypair"
-  #info "get token: $token"
+  info "get token: $token"
   [ -n "$TOKEN" ] && ! checktoken "$token" && return 1
   [ -n "$cn" -a -n "$dn" ] && echo "Pick either cn or dn" && return 1
 
@@ -360,6 +299,50 @@ clientadd() {
   ### cat $KEY >> $paramOutput
 }
 
+##
+## find search based on index.txt
+## cn & serial is good
+##
+findcert() {
+  local paramOutput=$1
+  unset dn cn ip ns o days ou c keygen token
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      dn) dn=$varvalue ;;
+      cn) cn=$varvalue ;;
+      ip) ip=$varvalue ;;
+      serial) serial=$varvalue ;;
+    esac
+  done
+
+  info "do findcert- find certificate, without private key"
+  #[ -n "$cn" -a -n "$serial" ] && echo "Pick either cn or dn" && return 1
+
+  case "$varname" in
+    serial)
+      lines=`grep -i "$serial" index.txt`
+      for x in $lines; do   # <--- isn't this an array
+        info "line: $x" 
+        result=`echo $x | cut -f3`     
+        if [ "$result" == "$serial" ]; then && echo 
+          certstr=$(openssl x509 -in ./newcerts/$serial.pem -text)
+          echo $certstr >> paramOutput
+        fi
+      done
+      ;;
+    cn)
+      info "find certificate with comman name"
+      ;;
+  esac
+
+  
+
+}
+
+
+
 ##test1 for checktoken
 test_checktoken() {
   
@@ -463,6 +446,15 @@ case "$ca_method" in
     echo $DATE    >> /tmp/pkizone.info
     out=/tmp/pkizone.info
     ;;
+
+  findcert)
+    tmpcert=/tmp/tmp-certificate-$$.pem
+    info "search: tmpfile=$tmpcert"
+    trap "rm -f $tmpcert" EXIT
+
+    err=$(searchcertificate "$tmpcert"  ) || badRequest "$err"
+
+    out=$tmpcert
   *)
     notFound
     ;;
