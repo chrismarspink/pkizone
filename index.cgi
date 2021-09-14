@@ -335,11 +335,11 @@ revoke() {
 }
 
 gencrl() {
-  local paramOutput=$1
+  #local paramOutput=$1
   info "generate crl..."
-  exec 100<ca.cnf &&  flock 100 &&  openssl ca  -config ca.cnf  -gencrl 
+  openssl ca  -config ca.cnf  -gencrl 
   #openssl crl -passin file:/run/secrets/"$ca_id"_password   -in ./crl/crl.pem -text -noout -out $paramOutput
-  info "gencrl param: $paramOutput"
+  #info "gencrl param: $paramOutput"
 }
 
 
@@ -499,8 +499,8 @@ case "$ca_method" in
   gencrl)
     crldata=/tmp/crldata-$$.pem
     trap "rm -f $crldata" EXIT
-    err=$(gencrl "$crldata" 2>&1) || badRequest "$err"
-    info "crl-data(2): $crldata"
+    err=$(gencrl  2>&1) || badRequest "$err"
+    ##info "crl-data(2): $crldata"
     out=./crl/crl.pem
     ;;
   crl)
