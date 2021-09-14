@@ -227,19 +227,12 @@ case "$command" in
         ;;
 
     xsign)
-        #curl -fk -o ./$ca_name.ticket  "$ticket/$ca_name"
-        #echo "ticket: $(cat ./$ca_name.ticket)"
-        #token="$(openssl dgst -sha1 -sign $client_sign_key ./$ca_name.ticket | openssl base64 -A)"
-        #echo "token: $token"
-
-        #idtoken="$clientid:$token"
         idtoken="mysecret"
         echo "id-token: $idtoken"
 
         dn="/C=KR/O=Test/OU=Testou/CN=host_$mydate"
         curl -fk -o host_$mydate.pem "$xsign/$ca_name?dn=$dn&days=30&keygen=ecc:secp256k1&token=$idtoken"
         cat host_$mydate.pem
-
         ;;
     
     gencrl)
