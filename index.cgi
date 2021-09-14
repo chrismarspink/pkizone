@@ -337,7 +337,7 @@ revoke() {
 gencrl() {
   local paramOutput=$1
   info "generate crl..."
-  exec 100<ca.cnf &&  flock 100 &&  openssl ca  -config ca.cnf  -gencrl -out ./crl/crl.pem
+  exec 100<ca.cnf &&  flock 100 &&  openssl ca  -config ca.cnf  -gencrl -out ./crl/crl.pem -passin file:/run/serets/"$ca_id"_password
   openssl crl -passin file:/run/secrets/"$ca_id"_password   -in ./crl/crl.pem -text -noout -out $paramOutput
   info "CRL DATA: $(cat $paramOutput)"
 }
