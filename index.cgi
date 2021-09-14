@@ -497,6 +497,7 @@ case "$ca_method" in
     out=$revoke_subj
     ;;
   gencrl)
+    info "generate crl..."
     crldata=/tmp/crldata-$$.pem
     trap "rm -f $crldata" EXIT
     err=$(gencrl  2>&1) || badRequest "$err"
