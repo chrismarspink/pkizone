@@ -2,23 +2,24 @@
 set -e
 
 LOCAL_HOST_NAME="jkkimui-MacBookPro.local"
+SERVICE_HOST_NAME="ip-172-31-13-17"
 
 mydate=$(date "+%Y%M%d%H%m.%S")
-hostname=$(hostname)
-if [ $hostname == $LOCAL_HOST_NAME ]; then
-    pkizone_src=./
-    ca_home=/Users/jkkim/dev/ca.service/ssl/ca
-    server=https://127.0.0.1
-    client_secret="mysecret"
-
-    #SERVER_TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649"
-else
+#hostname=$(hostname)
+hostname=$SERVICE_HOST_NAME
+if [ $hostname == $SERVICE_HOST_NAME ]; then
     echo "hostname: $hostname"
     pkizone_src=./
     ca_home=/home/ubuntu/ca.service/ssl/ca
     server=https://3.37.221.15
     client_secret="mysecret"
-    #SERVER_TOKEN="md5:06c219e5bc8378f3a8a3f83b4b7e4649"
+
+else
+    pkizone_src=./
+    ca_home=/Users/jkkim/dev/ca.service/ssl/ca
+    server=https://127.0.0.1
+    client_secret="mysecret"
+    
 fi 
 
 #tk=$(echo -n $client_secret | md5sum)
@@ -40,6 +41,7 @@ crl=$server/crl
 ticket=$server/ticket
 clientadd=$server/clientadd
 test=$server/test
+cmsencrypt=$server/cms-encrypt
 
 #client_sign_key=./sign.key
 #client_sign_pub=./sign.pub
@@ -208,6 +210,10 @@ case "$command" in
         echo "end registration"
         ;;
 
+    cmsencrypt)
+        curl -fk --data-binary @$2 -o $2.cms \
+        "$cmsencrypt/$ca_name?from=sender@email&serial=0F&to=receiver.email&subject=test"
+        ;;
     sign)
         idtoken="mysecret"
         echo "token: $idtoken"

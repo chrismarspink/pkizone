@@ -222,6 +222,108 @@ xsign() {
   cat $KEY >> $paramOutput
 }
 
+upload-file(){
+  file=/tmp/$$-$RANDOM
+
+  # CGI output must start with at least empty line (or headers)
+  printf '\r\n'
+    cat <<EOF
+<html>
+<head>
+<title>Upload</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
+</head>
+<body>
+EOF
+
+  IFS=$'\r'
+  read -r delim_line
+
+  IFS=''
+  delim_line="${delim_line}--"$'\r'
+
+  read -r line
+  filename=$(echo $line | sed 's/^.*filename=//' | sed 's/\"//g' | sed 's/.$//')
+  fileext=${filename##*.}
+
+  while read -r line; do
+    test "$line" = '' && break
+    test "$line" = $'\r' && break
+  done
+
+  # Note: This will result in junk at end of line (see format above)
+  cat > $file
+
+  # Get the line count
+  LINES=$(wc -l $file | cut -d ' ' -f 1)
+
+  # Remove the last line
+  head -$((LINES - 1)) $file >$file.1
+
+  # Copy eveything but the last line to a temp file
+  head -$((LINES - 2)) $file.1 >$file.2
+
+  # Copy the new last line but remove trailing \r\n
+  tail -1 $file.1 > $file.3
+  tail -c 2 $file.3 > $file.5
+  CRLF=$(hexdump -ve '/1 "%.2x"' $file.5)
+  # Check if the last two bytes are \r\n
+  if [ "$CRLF" = "0d0a" ];then
+    BYTES=$(wc -c $file.3 | cut -d ' ' -f 1)
+    truncate -s $((BYTES-2)) $file.3
+  fi
+
+  rm $file.5
+  cat $file.2 $file.3 > $file.4
+  cp $file.4 $file
+
+  cat <<EOF
+<h1>Upload Successful</h1>
+EOF
+
+  cat <<EOF
+</body>
+</html>
+EOF
+
+  exit 0
+
+}
+
+##---------- ----------
+## CMS encrypt ver1
+## no security
+##---------- ----------
+cms-encrypt() {
+  local paramOutput=$1
+  unset from to subject enc serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      from) from=$varvalue ;;
+      to) to=$varvalue ;;
+      subject) subject=$varvalue ;;
+      serial) serial=$varvalue ;;
+    esac
+  done
+
+  mydate=$(date "+%Y%M%d%H%m.%S")
+
+  info "command: openssl cms -encrypt -in <(cat -) -out $paramOutput -aes256 ./newcerts/$serial.pem"
+  openssl cms -encrypt -in <(cat -) -out $paramOutput -aes256 ./newcerts/$serial.pem
+  #openssl cms -aes256 \
+  #  $([ -n "$from" ] && echo "-from $from" || :) \
+  #  $([ -n "$subject" ] && echo "-subject $subject" || :) \
+  #  $([ -n "$to" ] && echo "-to $to" || :) \
+  #  -in <(cat -) \
+  #  -out "$paramOutput" \
+  #  ./newcerts/$serial.pem
+
+
+  info $(cat $paramOutput)
+}
 
 revoke() {
   local paramOutput=$1
@@ -249,8 +351,7 @@ clientadd_new() {
 
 clientadd() {
   local pubkeyfile=$1
-  info "client registration, begin : tmpfile=$pubkeyfile"
-  #unset clientid token publickey dn cn ip ns o days ou c keygen
+  nset clientid token publickey dn cn ip ns o days ou c keygen
   for param in ${QUERY_STRING//&/ }; do
     varname="${param%%=*}"
     varvalue="${param#*=}"
@@ -271,14 +372,14 @@ clientadd() {
 
   ##1. ticket file for verify client token
   ticketfile=./ca.ticket
+
   #2. publickey를 저장
   openssl ec -pubin -in <(cat -) -outform PEM -out $pubkeyfile
-  info "in pubfile = $(cat $pubkeyfile)"
+
   #3. verify client token
   echo  $token | openssl base64 -d > $pubkeyfile.sig
 
   #echo "dec token ==> $detoken"
-  #pop process
   result="$(openssl dgst -sha1 -verify $pubkeyfile -signature $pubkeyfile.sig $ticketfile)"
   info "verify result ==> [$result]" 
 
@@ -293,15 +394,26 @@ clientadd() {
     info "error: $result"
   fi
 
-
-  ### verify 이후 파일 삭제 - 성공여부와는 무관
   rm $pubkeyfile.sig
-  ### cat $KEY >> $paramOutput
+
 }
 
 ##
-## find search based on index.txt
-## cn & serial is good
+## 전제조건
+## xsign ==> 
+    #### 일회용 키로 암호화 + 키를 메일로 전달
+    #### 메일주소를 키로 사용
+#### sign/xsign으로 생성된 경우에 한해 가능
+    #### ENC 가능
+    #### DEC: 자신의 개인키가 필요 - 불가능
+    #### SIGN: 자신의 개인키가 필요 - 불가능
+    #### VERIFY: 쌉 가능
+## register --> mykey hash를 생성  md4
+## CMS-API를 위한 등록 과정 수행 --> 인증서마다 고유의 ID를 부여
+## CMS-ENC: infile, GET(certid)
+## CMS-DEC: infile, GET(keyid: pkey, certificate)
+## CMS-SIGN: infile, mykeyid
+## CMS-VERIFY: infile, cacert
 ##
 findcert() {
   local paramOutput=$1
@@ -336,34 +448,8 @@ findcert() {
       info "find certificate with comman name"
       ;;
   esac
-
-  
-
 }
 
-
-
-##test1 for checktoken
-test_checktoken() {
-  
-  info "test checktone()  ..."
-  #unset clientid token publickey dn cn ip ns o days ou c keygen
-  for param in ${QUERY_STRING//&/ }; do
-    varname="${param%%=*}"
-    varvalue="${param#*=}"
-    case "$varname" in
-      token) token=$varvalue ;;
-    esac
-  done
-
-  info "token:(id+hash) $token" 
-
-  [ ! -n "$token"  ] && echo "no client token supplied" >&2  && return 1
-
-  [ -n "$token" ] && ! checktoken "$token" && return 1
-
-  info "chcektoken pass.. do something"
-}
 
 # breakdown /<ca_method>[/<ca_id>]
 IFS="/" read -r ca_method ca_id <<<"${PATH_INFO#/}"
@@ -372,14 +458,20 @@ grep -Eq ",${ca_id}," <<<",${CA_LIST}," || notFound
 cd "$CA_DIR/$ca_id" 2>/dev/null || notFound
 case "$ca_method" in
   test)
-    info "test..."
-    test_checktoken || unAuthorized
-
+    info "hello ..."
     out=ca.pem
-
+    ;;
+  ## ---------- ----------
+  ## 일단 보안 무시하고 암호화
+  ## ---------- ----------
+  cms-encrypt)  
+    CMS=/tmp/cms-enc-out-$$.pem
+    trap "rm -f $CMS" EXIT
+    err=$(cms-encrypt "$CMS" 2>&1)  || badRequest "$err"
+    info "Encrypt with CMS(2): $(openssl cms -cmsout -in $CMS -text)"
+    out=$CMS
     ;;
   sign)  
-    #err=$(checktoken) || unAuthorized
     CRT=/tmp/crt-$$.pem
     trap "rm -f $CRT" EXIT
     err=$(sign "$CRT" 2>&1)  || badRequest "$err"
@@ -387,19 +479,17 @@ case "$ca_method" in
     out=$CRT
     ;;
   xsign)  
-    #err=$(checktoken) || unAuthorized
     XCRT=/tmp/xcrt-$$.pem
     trap "rm -f $XCRT" EXIT
     err=$(xsign "$XCRT" 2>&1) || badRequest "$err"
     info "new keypair and certificate generated($XCRT): $(openssl x509 -noout -subject -in $XCRT)"
     out=$XCRT
     ;;
-  ca)
+  cacert)
     out=ca.pem
     info "CA cert($ca_id): $(openssl x509 -noout -subject -in ca.pem)"
     ;;
   revoke)
-    #err=$(checktoken) || unAuthorized
     revoke_subj=/tmp/revoke_subj-$$.pem
     trap "rm -f $revoke_subj" EXIT
     err=$(revoke "$revoke_subj" 2>&1) || badRequest "$err"
@@ -418,10 +508,8 @@ case "$ca_method" in
     out=./crl/crl.pem
     ;;
   ticket)
-    info "ticket..."
     ticketfile=ca.ticket
     out=$ticketfile
-    ##out=./ca.ticket
     t="$(cat $out)"
     info "ticket file: $out"
     out=$ticketfile
@@ -431,7 +519,6 @@ case "$ca_method" in
     trap "rm -f $tmpid" EXIT
     info "begin add client ==> tmpclientid file: $tmpid"
     err=$(clientadd "$tmpid"  ) || badRequest "$err"
-    ##out=$tmpclientid
     info "end add client..."
     out=$tmpid
     ;;
@@ -456,6 +543,7 @@ case "$ca_method" in
 
     out=$tmpcert
     ;;
+
   *)
     notFound
     ;;
