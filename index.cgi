@@ -60,6 +60,8 @@ checktoken() {
 }
 
 
+
+
 ### sign() exec as a subprocess - do not write HTTP headers
 #1 Output
 sign() {
@@ -125,6 +127,52 @@ sign() {
       fi
     )
 }
+
+
+
+### OCSP
+#1 verify
+ocsp_verify() {
+  local paramOutput=$1
+  unset serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      serial) 
+        serial=$varvalue 
+        info "ocsp-verify: $serial"
+        ;;
+    esac
+  done
+
+  ## ##########
+  ## TEMP - make VA key(rkey) using CA key
+  ## ##########
+
+  vakey=/tmp/$ca_id-va.pem
+
+  if [ ! -f $vakey ]; then
+    openssl ec -in ./private/ca-key.pem -out $vakey -passin file:/run/secrets/"$ca_id"_password 
+  fi
+
+  if [ -n "$serial" ] ; then
+    openssl ocsp -issuer ca.pem -index index.txt -CA ca.pem \
+      -rsigner ./ca.pem -rkey $vakey \
+      -noverify -resp_text \
+      -out $paramOutput \
+      -serial $serial 
+  else
+    openssl ocsp -issuer ca.pem -index index.txt -CA ca.pem \
+      -rsigner ./ca.pem -rkey $vakey \
+      -noverify -resp_text \
+      -out $paramOutput \
+      -cert <(cat -) 
+  fi
+
+}
+
 
 
 xsign() {
@@ -334,10 +382,10 @@ revoke() {
   exec 100<ca.cnf &&  flock 100 &&  openssl ca -batch -config ca.cnf -passin file:/run/secrets/"$ca_id"_password  -revoke $paramOutput
 }
 
-gencrl() {
+gencrlmain() {
   #local paramOutput=$1
-  info "generate crl..."
-  openssl ca  -config ca.cnf  -gencrl -passin file:/run/secrets/"$ca_id"_password
+  info "generate gencrlmain()..."
+  openssl ca  -config ca.cnf  -gencrl -passin file:/run/secrets/"$ca_id"_password -out ./crl/crl.pem
   #openssl crl -passin file:/run/secrets/"$ca_id"_password   -in ./crl/crl.pem -text -noout -out $paramOutput
   #info "gencrl param: $paramOutput"
 }
@@ -478,6 +526,13 @@ case "$ca_method" in
     info "New cert: $(openssl x509 -noout -subject -in $CRT)"
     out=$CRT
     ;;
+  ocsp_verify)  
+    OCSP=/tmp/ocsp-$$.pem
+    trap "rm -f $OCSP" EXIT
+    err=$(ocsp_verify "$OCSP" 2>&1)  || badRequest "$err"
+    info "OCSP Verify: $COCSP"
+    out=$OCSP
+    ;;
   xsign)  
     XCRT=/tmp/xcrt-$$.pem
     trap "rm -f $XCRT" EXIT
@@ -498,9 +553,9 @@ case "$ca_method" in
     ;;
   gencrl)
     info "generate crl..."
-    crldata=/tmp/crldata-$$.pem
-    trap "rm -f $crldata" EXIT
-    err=$(gencrl  2>&1) || badRequest "$err"
+    #crldata=/tmp/crldata-$$.pem
+    #trap "rm -f $crldata" EXIT
+    err=$(gencrlmain  2>&1) || badRequest "$err"
     ##info "crl-data(2): $crldata"
     out=./crl/crl.pem
     ;;

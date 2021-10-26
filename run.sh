@@ -6,7 +6,7 @@ SERVICE_HOST_NAME="ip-172-31-13-17"
 
 mydate=$(date "+%Y%M%d%H%m.%S")
 #hostname=$(hostname)
-hostname=$SERVICE_HOST_NAME
+hostname=$LOCAL_HOST_NAME
 if [ $hostname == $SERVICE_HOST_NAME ]; then
     echo "hostname: $hostname"
     pkizone_src=./
@@ -15,6 +15,10 @@ if [ $hostname == $SERVICE_HOST_NAME ]; then
     client_secret="mysecret"
 
 else
+    echo ""
+    echo "-----------------------"
+    echo "build on localhost"
+    echo "-----------------------"
     pkizone_src=./
     ca_home=/Users/jkkim/dev/ca.service/ssl/ca
     server=https://127.0.0.1
@@ -42,6 +46,7 @@ ticket=$server/ticket
 clientadd=$server/clientadd
 test=$server/test
 cmsencrypt=$server/cms-encrypt
+ocsp_verify=$server/ocsp_verify
 
 #client_sign_key=./sign.key
 #client_sign_pub=./sign.pub
@@ -78,8 +83,8 @@ case "$command" in
         docker tag pkizone:$2 jkkim7202/pkizone:$2
         docker push jkkim7202/pkizone:$2
 
-        docker tag pkizone:$2 jkkim7202/pkizone:latest
-        docker push jkkim7202/pkizone:latest
+        #docker tag pkizone:$2 jkkim7202/pkizone:latest
+       # docker push jkkim7202/pkizone:latest
         ;;
     pkizone-secret)
         docker secret create iot_smarthome_password iot_smarthome.password
@@ -224,6 +229,10 @@ case "$command" in
         openssl x509 -in ./host_$mydate.pem -noout -subject
 
         cat ./host_$mydate.pem
+        ;;
+        
+    ocsp_verify)
+        curl -fk --data-binary @$2 "$ocsp_verify/$ca_name?ocsp_verify"
         ;;
 
     xsign)
