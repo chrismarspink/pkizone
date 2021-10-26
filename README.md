@@ -254,6 +254,12 @@ curl -fk --data-binary @my.pem   "https://localhost/gencrl/$ca_name"
 #stdout --> CRL 파일 출력
 ```
 
+OCSP 검증(ocsp_verify)
+```
+#my.pem 인증서의 유효성을 검증
+curl -fk --data-binary @my.pem   "https://localhost/ocsp_verify/$ca_name"
+
+```
 
 # 다중 인증 기관(Multi Certificate Authority) 설정
 
