@@ -218,7 +218,7 @@ curl -fk --data-binary @host.csr -o host.pem "https://localhost/sign?cn=my-host&
 # 타원곡선 알고리즘
 # xsign API와 keygen 파라메터를 제공한다.
 # eg) keygen=rsa:2048
-curl -fk -o mykeypair.pem "https://localhost/xsign/$ca_name?dn=$dn&days=365&keygen=ecc:secp256k1&token=..."
+curl -fk -o mykeypair.pem "https://localhost/xsign/$ca_name?dn=$dn&days=365&keygen=ecc:secp256k1&token=<SECRET>"
 cat mykeypair.pem
 ```
 
@@ -260,6 +260,85 @@ OCSP 검증(ocsp_verify)
 curl -fk --data-binary @my.pem   "https://localhost/ocsp_verify/$ca_name"
 
 ```
+# CMS(Cryptographic Message Syntax) 메시지 서비스
+
+CMS 암호화(cms_encrypt)
+```
+#메시지(eg, plain.txt)를 인증서로 암호화하고 CMS(EnvelopedMessage)로 인코딩
+#cipher : aes-128-cbc/aes-192-cbc/aes-256-cbc
+#serial : 암호화에 사용될 인증서의 시리얼번호($ca_name이 발급한 인증서에만 해당함) - 필수
+#outformat : pem/smime(Default)
+curl -fk --data-binary @plain.txt -o plain.txt.enc "https://localhost/cms_encrypt/$ca_name?cipher=aes-192-cbc&serial=<SERIAL>&outformat=pem"
+curl -fk --data-binary @plain.txt "https://localhost/cms_encrypt/$ca_name?serial=<SERIAL>"
+#run.sh 사용시
+./run.sh cms_encrypt plain.txt <SERIAL>
+```
+
+CMS 복호화(cms_decrypt) - 임시
+```
+#CMS메시지를 복호화하고 원문을 반환, 개인키가 필요하며 현재 이 기능은 데모용으로만 제공됨
+
+#serial : 암호화에 사용될 인증서의 시리얼번호($ca_name이 발급한 인증서에만 해당함) - 필수
+#outformat : pem/smime(Default)
+curl -fk --data-binary @plain.txt.enc -o plain.txt.dec "https://localhost/cms_decrypt/$ca_name?serial=<SERIAL>&outformat=pem"
+curl -fk --data-binary @plain.txt.enc "https://localhost/cms_decrypt/$ca_name?serial=<SERIAL>"
+
+#run.sh 사용시
+./run.sh cms_decrypt plain.txt.enc <SERIAL>
+
+```
+
+
+CMS 서명(cms_sign) - 임시
+```
+#메시지에 전자서명을 추가 CMS(SignedMessage)를 생성, 개인키가 필요하며 현재 이 기능은 데모용으로만 제공됨
+
+#serial : 암호화에 사용될 인증서의 시리얼번호($ca_name이 발급한 인증서에만 해당함) - 필수
+#outformat : pem/smime(Default)
+curl -fk --data-binary @plain.txt -o plain.txt.sign "https://localhost/cms_sign/$ca_name?serial=<SERIAL>&outformat=pem"
+curl -fk --data-binary @plain.txt "https://localhost/cms_sign/$ca_name?serial=<SERIAL>"
+
+#run.sh 사용시
+./run.sh cms_sign plain.txt <SERIAL>
+
+```
+
+
+CMS 검증(cms_verify)
+```
+#CMS(SignedMessage)의 서명이 올바른지 검증
+
+#outformat : pem/smime(Default)
+curl -fk --data-binary @plain.txt.cms -o result.txt "https://localhost/cms_verify/$ca_name"
+curl -fk --data-binary @plain.txt.cms "https://localhost/cms_verify/$ca_name"
+
+#run.sh 사용시
+./run.sh cms_verify plain.txt.cms 
+
+```
+
+
+CMS 메시지 파싱(cms_parse)
+```
+#CMS(SignedMessage) 구문을 분석(parsing)하여 텍스트로 
+
+#outformat : pem/smime(Default)
+curl -fk --data-binary @plain.txt.cms -o result.txt "https://localhost/cms_parse/$ca_name"
+curl -fk --data-binary @plain.txt.cms "https://localhost/cms_parse/$ca_name"
+
+#run.sh 사용시
+./run.sh cms_parse plain.txt.cms 
+
+```
+
+OCSP 검증(ocsp_verify)
+```
+#my.pem 인증서의 유효성을 검증
+curl -fk --data-binary @my.pem   "https://localhost/ocsp_verify/$ca_name"
+
+```
+
+
 
 # 다중 인증 기관(Multi Certificate Authority) 설정
 
