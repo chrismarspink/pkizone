@@ -326,3 +326,7 @@ When using multi certificate authority, the following environment variables migh
 # 운영 적용
 
 * `/ssl` 디렉토리가 마운트 되어야 한다. 인증서 생성 정보가 저장되는 디렉토리
+
+# 로그
+
+* `/ssl/ca/pkizone.log` 파일 참조
