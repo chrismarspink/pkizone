@@ -6,12 +6,28 @@ DATE=$(date "+%Y%M%d%H%m.%S")
 PROG="PKIZONE(c), GreenZone Security Co., Ltd. All rights reserved."
 
 VERIFIED_OK="Verified OK"
+DOWNLOAD_FILE="DownloadFile"
+DOWNLOAD_PKCS12="DownloadPKCS12"
+PRINT_TEXT="PrintText"
 
+outfmt=$PRINT_TEXT
 
 d() {
   date -u '+%Y/%m/%d %H:%M:%S GMT'
 }
 
+die() {
+  echo "$*" >&2
+  echo "HTTP/1.1 500 Internal Server Error"
+  echo "Content-Type: text/plain"
+  echo
+  echo "$*"
+  exit 1
+
+}
+
+##"$*"	모든 파라메터를 하나의 단어로 취급 "aa bb cc"
+##"$@"	모든 파라메터를 별도의 문자로 취급 "aa" "bb" "cc"
 badRequest() {
   echo "HTTP/1.1 400 Bad Request"
   echo "Content-Type: text/plain"
@@ -38,7 +54,9 @@ unAuthorized() {
 }
 
 info() {
-  echo "[$(d)] $*" >&2
+  #echo "[$(d)] $*" >&2
+  echo "[$(d)] $*" >> /ssl/ca/pkizone.log
+
 }
 
 #1 token
@@ -177,7 +195,7 @@ ocsp_verify() {
 
 xsign() {
   local paramOutput=$1
-  unset dn cn ip ns o days ou c keygen token
+  unset dn cn ip ns o days ou c keygen token pass outformat
   # No decode, no space from QUERY_STRING
   for param in ${QUERY_STRING//&/ }; do
     varname="${param%%=*}"
@@ -193,6 +211,8 @@ xsign() {
       days) days=$varvalue ;;
       token) token=$varvalue ;;
       keygen) keygen=$varvalue;;
+      outformat) outformat=$varvalue;; ## pkcs12
+      pass) pass=$varvalue;; ## only on pkcs12
     esac
   done
 
@@ -267,7 +287,23 @@ xsign() {
       fi
     )
 
-  cat $KEY >> $paramOutput
+  info "serial__"
+  serial="$(openssl x509 -in $paramOutput -serial -noout | cut -d"=" -f2)"
+  info "serial: $serial"
+
+  ## 패스워드 설정
+  ## pass가 있으면 $pass로 암호화 없으면 ""
+  if [ $outformat == "pkcs12" ]; then
+    cp $KEY ./newcerts/$serial.key
+    info "outformat:pkcs12"
+    #openssl pkcs12 -export -out ./newcerts/$serial.pfx -inkey ./newcerts/$serial.key -in ./newcerts/$serial.pem -passout pass:1234
+    openssl pkcs12 -export -out $paramOutput -inkey ./newcerts/$serial.key -in ./newcerts/$serial.pem -passout pass:$pass
+    outfmt=$DOWNLOAD_PKCS12
+  else
+    cat $KEY >> $paramOutput
+  fi
+
+  
 }
 
 upload-file(){
@@ -342,10 +378,12 @@ EOF
 ## CMS encrypt ver1
 ## no security
 ##---------- ----------
-cms-encrypt() {
+cms_encrypt() {
   local paramOutput=$1
   unset from to subject enc serial
-  # No decode, no space from QUERY_STRING
+
+  cipher="aes-128-cbc"
+
   for param in ${QUERY_STRING//&/ }; do
     varname="${param%%=*}"
     varvalue="${param#*=}"
@@ -354,13 +392,38 @@ cms-encrypt() {
       to) to=$varvalue ;;
       subject) subject=$varvalue ;;
       serial) serial=$varvalue ;;
+      cipher) cipher=$varvalue ;;
+      outformat) outformat=$varvalue ;;
     esac
   done
 
   mydate=$(date "+%Y%M%d%H%m.%S")
 
-  info "command: openssl cms -encrypt -in <(cat -) -out $paramOutput -aes256 ./newcerts/$serial.pem"
-  openssl cms -encrypt -in <(cat -) -out $paramOutput -aes256 ./newcerts/$serial.pem
+  #aes-128-cbc aes-128-ecb aes-192-cbc aes-192-ecb aes-256-cbc aes-256-ecb bf-**** camellia-**** cast-****
+  #chacha #des-**** rc2 rc2-40-cbc rc2-64-cbc rc2-cbc rc2-cfb  rc2-ecb rc2-ofb  rc4 rc4-40
+  
+  ### list="aes-128-cbc aes-192-cbc aes-256-cbc"
+  ### [[ $list =~ (^|[[:space:]])$cipher($|[[:space:]]) ]] && validCipher='yes' || validCpher='no'
+  ### if [ $validCipher == "no" ]; then
+    #info "invalid cipher name"
+    #return 255
+   ###  cipher="aes-128-cbc"
+  ### fi
+
+  if [ ! -f ./newcerts/$serial.pem ]; then
+    echo "invalid certificate serial number"
+    return 255
+  fi
+  
+  info "command: openssl cms -encrypt -in <(cat -) -out $paramOutput -$cipher ./newcerts/$serial.pem -outform $outformat"
+  exec openssl cms -encrypt -in <(cat -) -out $paramOutput \
+    $([ -n "$dn" ] && echo "-subj $dn" || :) \
+    $([ -n "$from" ] && echo "-from $from" || :) \
+    $([ -n "$subject" ] && echo "-subject $subject" || :) \
+    $([ -n "$to" ] && echo "-to $to" || :) \
+    $([ -n "$outformat" ] && echo "-outform $outformat" || :) \
+    -$cipher ./newcerts/$serial.pem
+
   #openssl cms -aes256 \
   #  $([ -n "$from" ] && echo "-from $from" || :) \
   #  $([ -n "$subject" ] && echo "-subject $subject" || :) \
@@ -368,9 +431,125 @@ cms-encrypt() {
   #  -in <(cat -) \
   #  -out "$paramOutput" \
   #  ./newcerts/$serial.pem
-
-
   info $(cat $paramOutput)
+}
+
+cms_decrypt() {
+  local paramOutput=$1
+  informat="pem"
+  unset from to subject enc serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      serial) serial=$varvalue ;;
+      informat) informat=$varvalue ;;
+
+    esac
+  done
+
+  mydate=$(date "+%Y%M%d%H%m.%S")
+
+  keyfile=./newcerts/$serial.key
+  recipfile=./newcerts/$serial.pem
+
+  info "command: openssl cms -decrypt -in <(cat -) -recip mycert.pem -inkey key.pem"
+  openssl cms -decrypt -in <(cat -) -out $paramOutput -recip $recipfile \
+    $([ -n "$informat" ] && echo "-inform $informat" || :) \
+    -inkey $keyfile
+  
+  info $(cat $paramOutput)
+}
+
+cms_sign() {
+  local paramOutput=$1
+  #informat="pem"
+  outformat="PEM"
+  unset from to subject serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      serial) serial=$varvalue ;;
+      informat) informat=$varvalue ;;
+      outformat) outformat=$varvalue ;;
+      from) from=$varvalue ;;
+      to) to=$varvalue ;;
+      subject) subject=$varvalue ;;
+    esac
+  done
+
+  mydate=$(date "+%Y%M%d%H%m.%S")
+
+  signer_key=./newcerts/$serial.key
+  signer_cert=./newcerts/$serial.pem
+
+  info "command: openssl cms -sign -in <(cat -) -out $paramOutput -signer $signer_cert -inkey $signer_key -text"
+  info "          inform=$informat, outform=$outformat, from=$from, to=$to, subject=$subject"
+  #info $(which openssl; openssl version)
+
+  
+  openssl cms -sign -in <(cat -) -out $paramOutput -signer $signer_cert -inkey $signer_key  -text
+  
+  #  $([ -n "$informat" ] && echo "-inform $informat" || :) \
+  #  $([ -n "$outformat" ] && echo "-outform $outformat" || :) \
+  #  $([ -n "$from" ] && echo "-from $from" || :) \
+  #  $([ -n "$subject" ] && echo "-subject $subject" || :) \
+  #  $([ -n "$to" ] && echo "-to $to" || :) \
+  #  -inkey $signer_key -output PEM -inform 
+  
+  info "$paramOutPut:"
+  info $(cat $paramOutput)
+}
+
+cms_verify() {
+  local paramOutput=$1
+  unset from to subject serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      opts) opts=$varvalue ;;
+      informat) informat=$varvalue ;;
+      outformat) outformat=$varvalue ;;
+    esac
+  done
+
+  mydate=$(date "+%Y%M%d%H%m.%S")
+
+  info "command: openssl cms -verify -in <(cat -) -CAfile ./ca.pem  2>&1 $paramOutput"
+  
+  openssl cms -verify -in <(cat -) \
+  $([ -n "$opts" ] && echo "$opts" || :) \
+  $([ -n "$informat" ] && echo "-inform $informat" || :) \
+  $([ -n "$outformat" ] && echo "-outform $outformat" || :) \
+   -CAfile ./ca.pem 2> $paramOutput
+  
+  info $paramOutput
+    
+}
+
+cms_parse() {
+  local paramOutput=$1
+  unset from to subject serial
+  # No decode, no space from QUERY_STRING
+  for param in ${QUERY_STRING//&/ }; do
+    varname="${param%%=*}"
+    varvalue="${param#*=}"
+    case "$varname" in
+      informat) informat=$varvalue ;;
+      outformat) outformat=$varvalue ;;
+    esac
+  done
+
+  info "command: openssl cms -cmsout -in <(cat -) -print -out $paramOutput"
+  
+  openssl cms -cmsout -in <(cat -) -print -out $paramOutput
+  
+  info $paramOutput
 }
 
 revoke() {
@@ -512,13 +691,49 @@ case "$ca_method" in
   ## ---------- ----------
   ## 일단 보안 무시하고 암호화
   ## ---------- ----------
-  cms-encrypt)  
+  cms_encrypt)  
     CMS=/tmp/cms-enc-out-$$.pem
     trap "rm -f $CMS" EXIT
-    err=$(cms-encrypt "$CMS" 2>&1)  || badRequest "$err"
+    err=$(cms_encrypt "$CMS" 2>&1)  || badRequest "$err"
     info "Encrypt with CMS(2): $(openssl cms -cmsout -in $CMS -text)"
     out=$CMS
     ;;
+## 
+  cms_decrypt)  
+    cms2=/tmp/cms-dec-out-$$.pem
+    trap "rm -f $cms2" EXIT
+    err=$(cms_decrypt "$cms2" 2>&1)  || badRequest "$err"
+    info "Decrypt CMS ... "
+    out=$cms2
+    ;;
+## 
+  cms_sign)  
+    info "message cms sign..."
+    cms3=/tmp/cms-sign-out-$$.pem
+    trap "rm -f $cms3" EXIT
+    err=$(cms_sign "$cms3" 2>&1)  || badRequest "$err"
+    info "Generate Signed CMS Message ... "
+    out=$cms3
+    ;;
+
+  cms_verify)  
+    info "message cms verification..."
+    cms4=/tmp/cms-verify-out-$$.pem
+    trap "rm -f $cms4" EXIT
+    err=$(cms_verify "$cms4" 2>&1)  || badRequest "$err"
+    info "Generate Verification CMS Message ... "
+    out=$cms4
+    ;;
+
+  cms_parse)  
+    info "cms message parse"
+    cms5=/tmp/cms-parse-out-$$.pem
+    trap "rm -f $cms5" EXIT
+    err=$(cms_parse "$cms5" 2>&1)  || badRequest "$err"
+    info "Parse CMS Message ... "
+    out=$cms5
+    ;;
+
   sign)  
     CRT=/tmp/crt-$$.pem
     trap "rm -f $CRT" EXIT
@@ -605,7 +820,22 @@ case "$ca_method" in
     ;;
 esac
 
-echo "HTTP/1.1 200 OK"
-echo "Content-Type: text/plain"
-echo
-cat "$out"
+if [[ $outfmt == $DOWNLOAD_PKCS12 ]]; then 
+  #filename="$out"
+  #contentLength=$(wc -c < $out)
+
+  #echo "Content-type: application/x-pkcs12"
+  #echo "Content-Length: $contentLength"
+  #echo "Content-Transfer-Encoding: binary"
+  #echo "Content-Disposition: attachment; filename=user.pfx"
+  #echo ""
+  #cat $filename
+  cat "$out.pfx"
+else
+  echo "HTTP/1.1 200 OK"
+  echo "Content-Type: text/plain"
+  echo
+  cat "$out"
+fi
+
+

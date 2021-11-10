@@ -45,8 +45,14 @@ crl=$server/crl
 ticket=$server/ticket
 clientadd=$server/clientadd
 test=$server/test
-cmsencrypt=$server/cms-encrypt
+cms_encrypt=$server/cms_encrypt
+cms_decrypt=$server/cms_decrypt
+cms_sign=$server/cms_sign
+cms_verify=$server/cms_verify
+cms_parse=$server/cms_parse
+
 ocsp_verify=$server/ocsp_verify
+database=$server/database
 
 #client_sign_key=./sign.key
 #client_sign_pub=./sign.pub
@@ -180,6 +186,14 @@ case "$command" in
         echo "TICKET($ca_name)  ==> $(cat ./$ca_name.ticket)"
         echo "ticket file: $ca_name.ticket"
         ;;
+    
+    database)
+        echo "------------------------------"
+        echo "request DATABASE"
+        echo "------------------------------" 
+        curl -fk "$database/$ca_name"
+        
+        ;;
     token)
         echo "------------------------------"
         echo "token generate"
@@ -215,10 +229,29 @@ case "$command" in
         echo "end registration"
         ;;
 
-    cmsencrypt)
-        curl -fk --data-binary @$2 -o $2.cms \
-        "$cmsencrypt/$ca_name?from=sender@email&serial=0F&to=receiver.email&subject=test"
+    cms_encrypt)
+        curl -fk --data-binary @$2 -o $2.enc \
+        "$cms_encrypt/$ca_name?cipher=aes-192-cbc&serial=$3&outformat=pem"
+        #"$cms_encrypt/$ca_name?from=sender@email&serial=$3&to=receiver.email&subject=test&cipher=aes-192-cbc"
         ;;
+    cms_decrypt)
+        curl -fk --data-binary @$2 -o $2.dec \
+        "$cms_decrypt/$ca_name?cipher=aes-192-cbc&serial=$3&outformat=pem"
+        ;;
+
+    cms_sign)
+        curl -fk --data-binary @$2 -o $2.sign \
+        "$cms_sign/$ca_name?serial=$3&outformat=PEM"
+        ;;
+
+    cms_verify)
+        curl -fk --data-binary @$2  "$cms_verify/$ca_name"
+        ;;
+    
+    cms_parse)
+        curl -fk --data-binary @$2  "$cms_parse/$ca_name"
+        ;;
+
     sign)
         idtoken="mysecret"
         echo "token: $idtoken"
@@ -235,6 +268,15 @@ case "$command" in
         curl -fk --data-binary @$2 "$ocsp_verify/$ca_name?ocsp_verify"
         ;;
 
+    xsign2)
+        idtoken="mysecret"
+        echo "id-token: $idtoken"
+
+        dn="/C=KR/O=Test/OU=Testou/CN=host_$mydate"
+        curl -fk -o host_$mydate.pfx "$xsign/$ca_name?dn=$dn&days=30&keygen=ecc:secp256k1&token=$idtoken&outformat=pkcs12"
+        file host_$mydate.pfx
+        ;;
+    
     xsign)
         idtoken="mysecret"
         echo "id-token: $idtoken"
